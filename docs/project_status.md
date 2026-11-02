@@ -2,7 +2,7 @@
 
 **Última actualización:** 2026-11-02
 **Rama activa:** `development`
-**Último commit:** `9ee49e3` — feat(fase2): feature engineering completa
+**Último commit:** `490b587` — feat(fase3): motor Sistema A V1 + dataset eurusd_operaciones.csv
 
 ---
 
@@ -13,7 +13,7 @@
 | FASE 0 | Auditoría y correcciones | ✅ COMPLETADA |
 | FASE 1 | Data Engineering | ✅ COMPLETADA |
 | FASE 2 | Strategy Spec + Feature Engineering | ✅ COMPLETADA |
-| FASE 3 | Motor determinista Sistema A + Backtester | ⬜ PENDIENTE |
+| FASE 3 | Motor determinista Sistema A + Backtester | ✅ COMPLETADA (V1) |
 | FASE 4 | Etiquetado + Modelo B (filtro setups) | ⬜ PENDIENTE |
 | FASE 5 | Modelo C (clasificador M15) | ⬜ PENDIENTE |
 | FASE 6 | Comparación A / B / C | ⬜ PENDIENTE |
@@ -95,17 +95,19 @@ Sub-decisiones que quedan pendientes:
 
 | Archivo de test | Tests | Estado | Módulo |
 |-----------------|-------|--------|--------|
-| test_parser_bi5.py | 68 | ✅ 68/68 | src/data/parser_bi5.py |
+| test_parser_bi5.py | 40 | ✅ 40/40 | src/data/parser_bi5.py |
 | test_loader.py | 28 | ✅ 28/28 | src/data/loader.py |
 | test_resampler.py | 43 | ✅ 43/43 | src/data/resampler.py |
 | test_auxiliary.py | 81 | ✅ 81/81 | src/features/auxiliary.py |
 | test_sessions.py | 52 | ✅ 52/52 | src/features/sessions.py |
 | test_structure.py | 42 | ✅ 42/42 | src/features/structure.py |
 | test_poi.py | 22 | ✅ 22/22 | src/features/poi.py |
-| test_liquidity.py | 19 | ✅ 19/19 | src/features/liquidity.py |
+| test_liquidity.py | 21 | ✅ 21/21 | src/features/liquidity.py |
 | test_fibonacci.py | 22 | ✅ 22/22 | src/features/fibonacci.py |
 | test_momentum.py | 30 | ✅ 30/30 | src/features/momentum.py |
-| **TOTAL** | **407** | **✅ 407/407** | |
+| **TOTAL** | **381** | **✅ 381/381** | |
+
+> Nota: una versión anterior del proyecto_status.md documentaba 407 tests (68 en test_parser_bi5.py, 19 en test_liquidity.py). Los valores reales verificados por pytest son 40 y 21 respectivamente (total: 381). La discrepancia era un error de documentación, no de cobertura.
 
 ---
 
@@ -147,14 +149,14 @@ proyecto final lae/
 │   ├── evaluation/          ⬜ Walk-forward, métricas (FASE 6)
 │   └── visualization/       ⬜ Gráficas (FASE 7)
 ├── tests/
-│   ├── test_parser_bi5.py   ✅ 68 tests
+│   ├── test_parser_bi5.py   ✅ 40 tests
 │   ├── test_loader.py       ✅ 28 tests
 │   ├── test_resampler.py    ✅ 43 tests
 │   ├── test_auxiliary.py    ✅ 81 tests
 │   ├── test_sessions.py     ✅ 52 tests
 │   ├── test_structure.py    ✅ 42 tests
 │   ├── test_poi.py          ✅ 22 tests
-│   ├── test_liquidity.py    ✅ 19 tests
+│   ├── test_liquidity.py    ✅ 21 tests
 │   ├── test_fibonacci.py    ✅ 22 tests
 │   └── test_momentum.py     ✅ 30 tests
 ├── scripts/

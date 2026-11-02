@@ -44,6 +44,31 @@
 
 ---
 
+## DEC-016: Parámetros del setup detector V1 (P-A, P-B, P-C confirmados — 2026-11-02)
+
+**P-A — Cuerpo mínimo de confirmación (CONF_MIN_BODY_RATIO)**
+**Decisión:** Eliminar el filtro del 20% de cuerpo mínimo. `CONF_MIN_BODY_RATIO = 0.0`.
+**Razonamiento:** El umbral del 20% carecía de fundamento en la metodología del trader. Imponía un criterio arbitrario no derivado de las reglas personales de SMC.
+**Efecto:** `body_range_ratio` se conserva como predictor continuo en el CSV (rango [0, 1]). Sin filtro previo, los setups con velas pequeñas (doji, etc.) también se registran. El modelo puede aprender si el tamaño del cuerpo es relevante.
+**Consecuencia:** Ver `src/strategy/setup_detector.py` — `CONF_MIN_BODY_RATIO = 0.0`.
+
+**P-B — Filtro de alineación H1 (HTF_FILTER)**
+**Decisión:** `HTF_FILTER = False`. Se registran todos los setups, independientemente del sesgo H1.
+**Razonamiento:** El sesgo H1 es información de contexto, no un filtro binario. El trader quiere que el modelo aprenda si la alineación H1 influye, no que se preseleccionen solo los setups alineados.
+**Nuevas categorías de h1_alignment:**
+  - "aligned"     — dirección del setup coincide con el sesgo H1
+  - "counter"     — setup contra el sesgo H1
+  - "neutral"     — H1 en rango ("ranging"), sin sesgo claro
+  - "unavailable" — sin datos H1 para la barra (NaN)
+**Consecuencia:** `h1_alignment` es una columna categórica en el CSV (requiere one-hot en el notebook antes del split X/y). `h1_bias` se mantiene en metadata pero no en el CSV.
+
+**P-C — Buffer SL (SL_BUFFER_PIPS)**
+**Decisión:** `SL_BUFFER_PIPS = 0.5` pips, provisional. Parámetro configurable.
+**Razonamiento:** Valor provisional sin evidencia suficiente para cambiarlo. Se mantiene como hipótesis de referencia hasta que se complete el análisis de sensibilidad (V2-013).
+**Consecuencia:** Ver `docs/roadmap_v2.md` (V2-013) para los escenarios 0.2 / 0.5 / 1.0 pips.
+
+---
+
 ## DEC-006: Sesiones operativas (PD-001 resuelto — 2026-11-01)
 
 **Decisión:** London Killzone = 02:00–05:00 America/New_York. NY AM Open = 09:30–11:00 America/New_York. Ventana alternativa Forex NY AM = 07:00–10:00 America/New_York.

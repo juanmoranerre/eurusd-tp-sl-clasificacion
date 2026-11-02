@@ -1,6 +1,6 @@
 # Notas de integración — CSV + Notebook Proyecto_02
 
-**Fecha:** 2026-11-02
+**Última actualización:** 2026-11-02 (V2 del dataset, post decisiones P-A/P-B/P-C)
 **Dataset:** `eurusd_operaciones.csv` (raíz del proyecto)
 **Notebook:** `notebooks/Proyecto_02.ipynb` (rama `feature/notebook`)
 
@@ -9,10 +9,12 @@
 ## Cómo funciona el flujo
 
 1. Ejecutar `python scripts/generate_dataset.py` desde la raíz del proyecto.
-   Esto produce `eurusd_operaciones.csv` en la raíz.
+   Produce tres archivos:
+   - `eurusd_operaciones.csv` — dataset principal para el notebook
+   - `eurusd_operaciones_excluidas.csv` — setups excluidos (AMBIGUOUS y similares)
+   - `results/eurusd_metadata.csv` — metadatos completos para análisis
 
-2. Copiar (o enlazar) el CSV a la carpeta donde se ejecuta el notebook,
-   si el notebook se ejecuta desde `notebooks/`.
+2. Copiar (o enlazar) `eurusd_operaciones.csv` al directorio de trabajo del notebook.
 
 3. Abrir y ejecutar el notebook.
 
@@ -23,17 +25,17 @@
 ```python
 df = pd.read_csv("eurusd_operaciones.csv")
 
-# Target binario
-df['resultado'] = df['resultado'].replace({"TP": 1, "SL": 0})
+# resultado ya es 0/1 entero — el replace es un no-op pero es inofensivo
+# df['resultado'] = df['resultado'].replace({"TP": 1, "SL": 0})  # ya no necesario
 
 # Dirección como numérico
 df['direccion'] = df['direccion'].replace({"compra": 1, "venta": 0})
 
-# One-hot encoding
-df = pd.get_dummies(df, columns=['sesion', 'cambio_estructura'])
+# One-hot encoding (sesion, cambio_estructura, h1_alignment)
+df = pd.get_dummies(df, columns=['sesion', 'cambio_estructura', 'h1_alignment'])
 
-# Antes del split X/y, eliminar fecha (string)
-df = df.drop(columns=['fecha'])   # puede estar implícito o explícito en el notebook
+# Eliminar fecha antes del split X/y
+df = df.drop(columns=['fecha'])
 
 # Conversión numérica completa
 df = df.astype(float)
@@ -42,54 +44,74 @@ y = df['resultado']
 X = df.drop(columns=['resultado'])
 ```
 
+**Importante:** `h1_alignment` es una variable categórica con 4 posibles valores
+("aligned", "counter", "neutral", "unavailable"). Debe incluirse en el `get_dummies`
+junto con `sesion` y `cambio_estructura`. Mezclarla directamente como string sin
+codificar produciría un error o resultados incorrectos.
+
 ---
 
 ## Columnas del CSV y su rol en el notebook
 
 | Columna | Tipo en CSV | Rol en notebook | Notas |
 |---------|-------------|-----------------|-------|
-| `fecha` | string timestamp | Se elimina antes del X/y split | No es predictor |
-| `direccion` | "compra"/"venta" | Predictor numérico (1/0 tras replace) | |
-| `sesion` | string categorical | One-hot → sesion_london_killzone, sesion_newyork_am_open | |
-| `cambio_estructura` | string categorical | One-hot → cambio_estructura_bos_bull, cambio_estructura_bos_bear | |
-| `atr` | float | Predictor numérico | ATR14 en precio |
-| `volatilidad` | float | Predictor numérico | Desviación estándar de log-retornos (20 barras) |
-| `volumen_rel` | float | Predictor numérico | Tick count / media 20 barras |
-| `distancia_estructura` | float | Predictor numérico | Pips desde el close al último swing |
+| `fecha` | string timestamp | Se elimina antes del split X/y | No es predictor |
+| `direccion` | str "compra"/"venta" | Predictor numérico (1/0 tras replace) | |
+| `sesion` | str categórico | Predictor → one-hot | 2 categorías |
+| `cambio_estructura` | str categórico | Predictor → one-hot | Último evento M15; no necesariamente alineado con la operación |
+| `h1_alignment` | str categórico | Predictor → one-hot | 4 categorías: aligned/counter/neutral/unavailable |
+| `atr` | float | Predictor numérico | ATR14 en precio (no en pips) |
+| `volatilidad` | float | Predictor numérico | Std de log-retornos, ventana 20 barras |
+| `volumen_rel` | float | Predictor numérico | Tick count Dukascopy / media 20 barras (no volumen centralizado) |
+| `distancia_estructura` | float | Predictor numérico | Siempre negativo (ver nota abajo) |
 | `fib_retracement` | float | Predictor numérico | [0.50, 1.00] — zona de descuento |
-| `fib_in_entry_zone` | int (0/1) | Predictor numérico | True si fib_retracement ≥ 0.50 |
-| `fib_in_pref_zone` | int (0/1) | Predictor numérico | True si 0.60 ≤ fib_retracement ≤ 0.70 |
-| `poi_type` | int (0=FVG, 1=OB) | Predictor numérico | |
-| `poi_state_at_entry` | int (0=fresh, 1=touched) | Predictor numérico | |
+| `fib_in_pref_zone` | int (0/1) | Predictor numérico | 1 si fib ∈ [0.60, 0.70] |
+| `poi_type` | int (0/1) | Predictor numérico | 0=FVG, 1=OB |
+| `poi_state_at_entry` | int (0/1) | Predictor numérico | 0=fresh, 1=touched |
 | `poi_size_pips` | float | Predictor numérico | Tamaño de la zona POI en pips |
-| `body_range_ratio` | float | Predictor numérico | Cuerpo de la vela de confirmación [0,1] |
-| `displacement_score` | float | Predictor numérico | Score del impulso de la vela de confirmación [0,1] |
-| `resultado` | "TP"/"SL" | Target binario (1/0 tras replace) | **VARIABLE OBJETIVO** |
+| `body_range_ratio` | float | Predictor numérico | Cuerpo de la vela de confirmación [0, 1] |
+| `displacement_score` | float | Predictor numérico | Score del impulso [0, 1] |
+| `resultado` | int (0 o 1) | **TARGET** | 1 si net_pips > 0, 0 si net_pips ≤ 0 |
+
+**Total: 17 columnas** (1 metadato, 15 predictores, 1 target)
+
+### Notas sobre columnas específicas
+
+**`resultado`:** Es directamente 0/1 entero. Representa rentabilidad neta, no
+necesariamente que el trade haya alcanzado el TP formal. Un TIME_EXIT que cierra
+en positivo también da resultado=1. El motivo de salida real está en metadata.
+
+**`cambio_estructura`:** Registra el último evento de estructura M15 observado antes
+de la barra de confirmación. Puede ser "bos_bull" incluso en una operación de VENTA
+si el último evento estructural fue alcista. No es un indicador alineado con la
+dirección del setup; es contexto de la estructura reciente.
+
+**`volumen_rel`:** Tick count de Dukascopy normalizado por la media de las últimas 20
+barras. No representa volumen real de mercado centralizado (el forex es OTC). Debe
+interpretarse como actividad relativa del flujo de precios en la ventana temporal.
+
+**`distancia_estructura`:** Siempre negativa.
+  - Para BUY: (close_confirmación - pivot_high_st) / PIP < 0
+    (close está por debajo del swing high de referencia)
+  - Para SELL: (pivot_low_st - close_confirmación) / PIP < 0
+    (close está por encima del swing low de referencia)
+  El valor absoluto representa la profundidad del retroceso desde el nivel estructural.
+  El signo es consistente en ambas direcciones (siempre negativo) y no codifica
+  información direccional adicional: la dirección se conoce por la columna `direccion`.
+
+**`h1_alignment`:** La categoría "neutral" indica H1 en rango ("ranging"), sin sesgo
+claro. La categoría "unavailable" indica ausencia de datos H1 para la barra. Ninguna
+de estas debe confundirse con "counter". El modelo debe poder distinguirlas tras el
+one-hot.
 
 ---
 
-## Estado del CSV (generado 2026-11-02)
+## Estado del CSV actual
 
-```
-Período           : 2020-01-01 → 2026-10-16
-Total setups      : 814
-Resultado TP (1)  : 294  (36.1%)
-Resultado SL (0)  : 520  (63.9%)
-Excluidos AMBIG.  : 1
-NaN en features   : 0
-```
-
-### Distribución temporal
-
-| Año  | SL  | TP  | Total |
-|------|-----|-----|-------|
-| 2020 | 73  | 53  | 126   |
-| 2021 | 72  | 48  | 120   |
-| 2022 | 83  | 45  | 128   |
-| 2023 | 84  | 44  | 128   |
-| 2024 | 71  | 41  | 112   |
-| 2025 | 68  | 41  | 109   |
-| 2026 | 69  | 22  | 91    |
+> Regenerar con `python scripts/generate_dataset.py` para obtener estadísticas actualizadas.
+> El dataset cambia con los parámetros P-A (sin filtro de cuerpo), P-B (sin filtro H1),
+> por lo que el número de setups puede diferir del dataset anterior (814 setups con
+> CONF_MIN_BODY_RATIO=0.20, HTF_FILTER=True).
 
 ---
 
@@ -100,57 +122,65 @@ NaN en features   : 0
 Las siguientes columnas se guardan en `results/eurusd_metadata.csv` pero NO en el CSV principal:
 
 - `entry_bid`, `sl_price`, `tp_price` — precios post-entrada
-- `risk_pips`, `exit_bid`, `gross_pips`, `net_pips`, `net_usd` — P&L de la simulación
-- `exit_reason` — razón de salida (TP/SL/TIME_EXIT/BE/AMBIGUOUS)
+- `entry_time`, `exit_time`, `exit_bid` — tiempos y precios de la simulación
+- `risk_pips`, `gross_pips`, `net_pips`, `net_usd` — P&L de la simulación
+- `exit_reason` — causa real de salida (TP/SL/BE/TIME_EXIT/AMBIGUOUS)
 - `bar_index`, `entry_bar_index` — índices internos
-- `h1_bias` — sesgo H1 redundante con `direccion`
+- `h1_bias` — sesgo H1 raw (redundante con h1_alignment)
+- `fib_in_entry_zone` — siempre 1 (varianza cero)
 
-Incluir cualquiera de estas columnas en el CSV de entrenamiento constituiría **data leakage** (información del futuro).
+Incluir cualquiera de estas columnas en el CSV de entrenamiento constituiría **data leakage**.
 
-### 2. Parámetros provisionales V1
+### 2. Supuestos de simulación — no son costes históricos observados
 
-El dataset fue generado con las siguientes decisiones provisionales **pendientes de confirmación del trader**:
-
-| Parámetro | Valor provisional | Variable |
-|-----------|-------------------|----------|
-| Cuerpo mínimo de vela de confirmación | 20% (body/range) | `CONF_MIN_BODY_RATIO` en setup_detector.py |
-| Buffer SL más allá del distal POI | 0.5 pips | `SL_BUFFER_PIPS` en setup_detector.py |
-| Filtro de alineación H1 | Obligatorio | `HTF_FILTER = True` en setup_detector.py |
-| Riesgo mínimo aceptable | 5 pips | `MIN_RISK_PIPS` en setup_detector.py |
-
-Si el trader confirma valores diferentes, hay que regenerar el dataset con `generate_dataset.py`.
+| Parámetro | Valor V1 | Estado |
+|-----------|----------|--------|
+| Spread | 0.2 pips | Hipótesis de referencia |
+| Slippage | 0.0 pips | Optimista |
+| Comisión | 5 USD/lote round-turn | Provisional (PD-021b PENDING) |
+| Coste total | ~0.7 pips | Deducido en net_pips |
+| Horizonte | 90 minutos reales | Tiempo transcurrido, no 90 barras M1 |
+| Buffer SL | 0.5 pips | Provisional P-C |
 
 ### 3. Split temporal para evaluación académica
 
-El KFold(10) del notebook mezcla datos de todos los años. Para una evaluación temporalmente correcta (no implementada en el notebook actual), usar:
-- Train: 2020-2024 (610 setups)
-- Test:  2025-2026 (204 setups)
+El KFold(10) del notebook mezcla datos de todos los años. Para una evaluación
+temporalmente correcta (no implementada en el notebook actual):
+- Train: 2020-2024
+- Test: 2025-2026
 
 Ver `docs/roadmap_v2.md` (V2-011) para el plan de validación walk-forward.
 
-### 4. Número de setups y potencia estadística
+### 4. h1_alignment: cuatro categorías
 
-Con 814 setups:
-- KFold(10) → ~82 setups por pliegue
-- Clase minoritaria (~36% TP): ~30 positivos por pliegue
-- Suficiente para Logistic Regression y SVM RBF; MLP puede requerir más muestras
+Con HTF_FILTER=False (P-B, 2026-11-02), el dataset incluye setups de todas las
+categorías de alineación. El notebook debe codificar `h1_alignment` con `get_dummies`
+antes del split para que los modelos puedan aprender la influencia de cada categoría.
 
-Si el trader relaja los filtros (HTF_FILTER=False, fib_min=0.4, etc.), el número puede aumentar considerablemente.
+---
+
+## Archivos generados
+
+| Archivo | Contenido | Para qué |
+|---------|-----------|---------|
+| `eurusd_operaciones.csv` | Dataset principal, 17 columnas, sin leakage | Notebook, modelos ML |
+| `eurusd_operaciones_excluidas.csv` | Setups excluidos (AMBIGUOUS) | Auditoría, debugging |
+| `results/eurusd_metadata.csv` | Metadatos completos por trade | Análisis, trazabilidad |
 
 ---
 
 ## Cómo regenerar el dataset
 
 ```bash
-# Con los parámetros actuales
+# Con los parámetros actuales (P-A, P-B, P-C)
 python scripts/generate_dataset.py
 
-# Con fecha alternativa
+# Con período alternativo
 python scripts/generate_dataset.py --start 2020-01-01 --end 2024-12-31
 
 # Modo silencioso
 python scripts/generate_dataset.py --quiet
 ```
 
-El script tarda ~10 minutos para el período completo (la detección de setups es el paso lento;
-la simulación M1 toma ~1 minuto adicional).
+El script tarda ~10-12 minutos para el período completo (la detección de setups
+es el paso lento; la simulación M1 toma ~1 minuto adicional).

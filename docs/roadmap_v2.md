@@ -226,6 +226,31 @@ V1 genera el dataset con el escenario central (spread 0.2 pips, slippage 0.0, co
 
 ---
 
+## V2-013: Análisis de sensibilidad al buffer SL
+
+**Qué es:**
+Comparación sistemática del impacto de distintos valores del buffer más allá del distal del POI sobre la distribución de resultados, el número de setups y la tasa de rentabilidad.
+
+**Escenarios propuestos:**
+| Buffer | Alias | Efecto esperado |
+|--------|-------|-----------------|
+| 0.2 pips | ajustado | Más setups activados; mayor riesgo de stop-hunting |
+| 0.5 pips | central (V1) | Equilibrio provisional |
+| 1.0 pips | holgado | Menos falsos activados; mayor riesgo en cada operación |
+
+**Por qué no en V1:**
+El parámetro está fijado en 0.5 pips de forma provisional (P-C, 2026-11-02). La sensibilidad requiere regenerar el dataset tres veces (una por escenario) y comparar métricas out-of-sample.
+
+**Qué falta:**
+- Decisión del trader sobre qué métrica guía la comparación (win_rate, R esperado, ROC-AUC del modelo).
+- Definición de "mejor" buffer: ¿menor coste por SL, más muestras, mejor clasificación?
+
+**Módulos afectados:**
+- `scripts/generate_dataset.py` — ya acepta `--sl_buffer_pips` como parámetro de línea de comandos (V2).
+- `src/strategy/setup_detector.py` — `SL_BUFFER_PIPS` es configurable vía `detect_setups(sl_buffer_pips=...)`.
+
+---
+
 ## Resumen de dependencias por decisión pendiente
 
 | Decisión | Bloquea |
