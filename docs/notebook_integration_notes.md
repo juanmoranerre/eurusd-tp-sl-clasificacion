@@ -1,6 +1,6 @@
 # Notas de integración — CSV + Notebook Proyecto_02
 
-**Última actualización:** 2026-11-02 (V2 del dataset, post decisiones P-A/P-B/P-C)
+**Última actualización:** 2026-11-02 (V1 cerrado definitivamente — C1 BID-BID + C2 unicidad POI)
 **Dataset:** `eurusd_operaciones.csv` (raíz del proyecto)
 **Notebook:** `notebooks/Proyecto_02.ipynb` (rama `feature/notebook`)
 
@@ -106,12 +106,20 @@ one-hot.
 
 ---
 
-## Estado del CSV actual
+## Estado del CSV actual (V1 cerrado — 2026-11-02)
 
-> Regenerar con `python scripts/generate_dataset.py` para obtener estadísticas actualizadas.
-> El dataset cambia con los parámetros P-A (sin filtro de cuerpo), P-B (sin filtro H1),
-> por lo que el número de setups puede diferir del dataset anterior (814 setups con
-> CONF_MIN_BODY_RATIO=0.20, HTF_FILTER=True).
+| Métrica | Valor |
+|---|---|
+| Setups válidos | 2,642 |
+| resultado = 1 | 969 (36.7%) |
+| resultado = 0 | 1,673 (63.3%) |
+| London Killzone | 1,574 |
+| NY AM Open | 1,068 |
+| h1_alignment aligned | 1,196 |
+| h1_alignment counter | 1,446 |
+
+Regenerar con `python scripts/generate_dataset.py` si es necesario (~570s).
+Los parámetros activos son P-A (sin filtro de cuerpo), P-B (sin filtro H1), P-C (SL buffer 0.5 pips), C1 (BID-BID) y C2 (unicidad POI por episodio).
 
 ---
 

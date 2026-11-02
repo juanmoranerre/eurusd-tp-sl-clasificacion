@@ -79,6 +79,7 @@ class SetupRecord:
     fecha:               pd.Timestamp
     bar_index:           int
     entry_bar_index:     int
+    poi_id:              int            # identificador único del POI (C2)
 
     # ── Variables del dataset (columnas del CSV)
     direccion:           str            # "compra" | "venta"
@@ -116,6 +117,7 @@ def _pois_from_features(df: pd.DataFrame) -> list[POI]:
     """Extrae todos los POIs detectados en el DataFrame M15."""
     pois: list[POI] = []
     datetime_col = df["datetime"].values if "datetime" in df.columns else None
+    poi_id = 0
 
     n = len(df)
     for i in range(n):
@@ -128,7 +130,9 @@ def _pois_from_features(df: pd.DataFrame) -> list[POI]:
                 proximal=df["fvg_high"].iat[i],
                 distal=df["fvg_low"].iat[i],
                 created_at=ts,
+                poi_id=poi_id,
             ))
+            poi_id += 1
 
         if df["fvg_bear"].iat[i]:
             pois.append(POI(
@@ -137,7 +141,9 @@ def _pois_from_features(df: pd.DataFrame) -> list[POI]:
                 proximal=df["fvg_low"].iat[i],
                 distal=df["fvg_high"].iat[i],
                 created_at=ts,
+                poi_id=poi_id,
             ))
+            poi_id += 1
 
         if df["ob_bull"].iat[i]:
             pois.append(POI(
@@ -146,7 +152,9 @@ def _pois_from_features(df: pd.DataFrame) -> list[POI]:
                 proximal=df["ob_high"].iat[i],
                 distal=df["ob_low"].iat[i],
                 created_at=ts,
+                poi_id=poi_id,
             ))
+            poi_id += 1
 
         if df["ob_bear"].iat[i]:
             pois.append(POI(
@@ -155,7 +163,9 @@ def _pois_from_features(df: pd.DataFrame) -> list[POI]:
                 proximal=df["ob_low"].iat[i],
                 distal=df["ob_high"].iat[i],
                 created_at=ts,
+                poi_id=poi_id,
             ))
+            poi_id += 1
 
     return pois
 
@@ -259,7 +269,7 @@ def detect_setups(
     conf_min_body: float = CONF_MIN_BODY_RATIO,
     sl_buffer_pips: float = SL_BUFFER_PIPS,
     fib_min_retracement: float = 0.50,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Escanea el DataFrame M15 y devuelve todos los setups detectados.
 
@@ -305,6 +315,7 @@ def detect_setups(
     disp_score = m15_feat["displacement_score"].values
 
     setups: list[SetupRecord] = []
+    c2_excluded_rows: list[dict] = []
 
     for i in range(1, n - 1):
         if not in_session_arr[i]:
@@ -332,6 +343,14 @@ def detect_setups(
                     POIState.FULLY_MITIGATED, POIState.INVALIDATED
                 ):
                     poi.update_state(bar_low, bar_high, bar_close)
+                    # C2: trackear episodios — precio sale completamente de la zona
+                    if poi.touches > 0 and poi.state not in (POIState.FULLY_MITIGATED, POIState.INVALIDATED):
+                        poi_lo_ep = min(poi.proximal, poi.distal)
+                        poi_hi_ep = max(poi.proximal, poi.distal)
+                        if poi.direction == POIDirection.BULLISH and bar_low > poi_hi_ep:
+                            poi.episode_count += 1
+                        elif poi.direction == POIDirection.BEARISH and bar_high < poi_lo_ep:
+                            poi.episode_count += 1
             continue
 
         setup_found = False
@@ -383,6 +402,24 @@ def detect_setups(
             if risk_pips < MIN_RISK_PIPS:
                 continue
 
+            # C2: un solo setup por POI por episodio continuo de contacto
+            if poi.last_setup_episode == poi.episode_count:
+                c2_excluded_rows.append({
+                    "fecha":            pd.Timestamp(datetimes[i]),
+                    "entry_bid":        entry_bid,
+                    "sl_price":         sl_price,
+                    "tp_price":         tp_price,
+                    "risk_pips":        risk_pips,
+                    "h1_alignment":     _h1_alignment(raw_bias, direction),
+                    "h1_bias":          str(raw_bias),
+                    "direccion":        "compra" if direction == "buy" else "venta",
+                    "sesion":           "london_killzone" if in_london[i] else "newyork_am_open",
+                    "poi_id":           poi.poi_id,
+                    "motivo_exclusion": "C2_POI_REUSE",
+                    "exit_reason":      "C2_POI_REUSE",
+                })
+                continue
+
             h1_align     = _h1_alignment(raw_bias, direction)
             session_lbl  = "london_killzone" if in_london[i] else "newyork_am_open"
             struct_event = _last_structure_event(m15_feat, i)
@@ -408,6 +445,7 @@ def detect_setups(
                 fecha                = pd.Timestamp(datetimes[i]),
                 bar_index            = i,
                 entry_bar_index      = i + 1,
+                poi_id               = poi.poi_id,
                 direccion            = "compra" if direction == "buy" else "venta",
                 sesion               = session_lbl,
                 cambio_estructura    = struct_event,
@@ -430,6 +468,7 @@ def detect_setups(
                 displacement_score   = disp,
                 h1_bias              = bias_label,
             )
+            poi.last_setup_episode = poi.episode_count
             setups.append(setup)
             setup_found = True
             break
@@ -439,9 +478,15 @@ def detect_setups(
                 POIState.FULLY_MITIGATED, POIState.INVALIDATED
             ):
                 poi.update_state(bar_low, bar_high, bar_close)
+                # C2: trackear episodios — precio sale completamente de la zona
+                if poi.touches > 0 and poi.state not in (POIState.FULLY_MITIGATED, POIState.INVALIDATED):
+                    poi_lo_ep = min(poi.proximal, poi.distal)
+                    poi_hi_ep = max(poi.proximal, poi.distal)
+                    if poi.direction == POIDirection.BULLISH and bar_low > poi_hi_ep:
+                        poi.episode_count += 1
+                    elif poi.direction == POIDirection.BEARISH and bar_high < poi_lo_ep:
+                        poi.episode_count += 1
 
-    if not setups:
-        return pd.DataFrame()
-
-    rows = [vars(s) for s in setups]
-    return pd.DataFrame(rows)
+    valid_df = pd.DataFrame([vars(s) for s in setups]) if setups else pd.DataFrame()
+    c2_excluded_df = pd.DataFrame(c2_excluded_rows) if c2_excluded_rows else pd.DataFrame()
+    return valid_df, c2_excluded_df

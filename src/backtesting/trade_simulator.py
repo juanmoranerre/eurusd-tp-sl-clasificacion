@@ -21,17 +21,34 @@ Reglas de simulación V1:
   - TIME_EXIT: si price no llega a TP ni SL dentro del horizonte de 90 min
   - AMBIGUOUS: si TP y SL se cruzan en la misma barra M1
 
-Precios efectivos:
+Convención de precios — BID-BID (V1, corrección C1 — 2026-11-02):
+  Todos los niveles de activación (SL, TP, BE), el precio de entrada y los
+  precios de salida se expresan en términos BID, que son los únicos disponibles
+  en el histórico de Dukascopy M1. El P&L bruto se calcula de BID a BID.
+  El coste total (spread + slippage + comisión) se descuenta UNA SOLA VEZ
+  como ajuste explícito en net_pips, a través de total_cost_pips.
+
   BUY:
-    entry_ask = entry_bid + spread
-    SL se activa cuando M1 low  <= sl_price  (BID terms)
-    TP se activa cuando M1 high >= tp_price  (BID terms)
-    BE se activa cuando M1 high >= be_price  (BID terms)
+    - Activación SL  : M1 low  <= sl_price  (BID terms)
+    - Activación TP  : M1 high >= tp_price  (BID terms)
+    - Activación BE  : M1 high >= be_price  (BID terms)
+    - gross_pips = (exit_bid - entry_bid) / PIP
+    - net_pips   = gross_pips - total_cost_pips   (spread descontado aquí, 1 vez)
   SELL:
-    entry_bid directamente
-    SL se activa cuando M1 high >= sl_price  (BID terms)
-    TP se activa cuando M1 low  <= tp_price  (BID terms)
-    BE se activa cuando M1 low  <= be_price  (BID terms)
+    - Activación SL  : M1 high >= sl_price  (BID terms)
+    - Activación TP  : M1 low  <= tp_price  (BID terms)
+    - Activación BE  : M1 low  <= be_price  (BID terms)
+    - gross_pips = (entry_bid - exit_bid) / PIP
+    - net_pips   = gross_pips - total_cost_pips   (spread descontado aquí, 1 vez)
+
+  Limitación del enfoque BID-only:
+    En una cuenta real, un BUY se ejecuta a ASK (BID + spread) y la activación
+    real del SL/TP también depende del spread vigente en cada momento. Al usar
+    únicamente datos BID, los precios de activación se aproximan a BID terms, lo
+    que implica una pequeña sub-estimación del spread en las activaciones. Esta
+    diferencia (típicamente 0.0–0.2 pips) es inferior a la incertidumbre de los
+    supuestos de spread (0.1–0.5 pips). Los costes no son históricos observados;
+    son supuestos de simulación documentados en CostScenario.
 
 Resultado binario:
   resultado = 1 si net_pips > 0
@@ -40,13 +57,13 @@ Resultado binario:
   Exit codes y resultado esperado:
     TP        → resultado = 1 (salvo coste > gross, teóricamente imposible con 2R)
     SL        → resultado = 0 (pérdida bruta + costes)
-    BE        → resultado = 0 (gross ≈ 0, costes negativos)
+    BE        → resultado = 0 (gross = 0, costes negativos → net = -0.7 pips escenario central)
     TIME_EXIT → resultado = 1 si net_pips > 0, else 0 (depende del precio al cierre)
     AMBIGUOUS → resultado = 0 (conservador; excluido del CSV principal)
 
 Manejo de huecos de datos M1:
   Si get_m1_slice devuelve 0 barras (no hay M1 para ese horario), el trade se
-  registra como TIME_EXIT en entry_time con net_pips = -coste.
+  registra como TIME_EXIT en entry_time con net_pips = -total_cost_pips.
 """
 
 from __future__ import annotations
@@ -187,9 +204,8 @@ def simulate_trade(
             )
 
         if tp_hit:
-            entry_eff  = sc.entry_price(entry_bid, direction)
-            gross_pips = CostModel.pnl_pips(entry_eff, tp_price, direction)
-            net_pips   = cost_model.net_pnl_pips(entry_eff, tp_price, direction, lots, scenario)
+            gross_pips = CostModel.pnl_pips(entry_bid, tp_price, direction)
+            net_pips   = gross_pips - sc.total_cost_pips(lots)
             return TradeResult(
                 exit_reason="TP",
                 entry_time=entry_time_ts,
@@ -203,9 +219,8 @@ def simulate_trade(
 
         if sl_hit:
             reason     = "BE" if be_active else "SL"
-            entry_eff  = sc.entry_price(entry_bid, direction)
-            gross_pips = CostModel.pnl_pips(entry_eff, current_sl, direction)
-            net_pips   = cost_model.net_pnl_pips(entry_eff, current_sl, direction, lots, scenario)
+            gross_pips = CostModel.pnl_pips(entry_bid, current_sl, direction)
+            net_pips   = gross_pips - sc.total_cost_pips(lots)
             return TradeResult(
                 exit_reason=reason,
                 entry_time=entry_time_ts,
@@ -221,9 +236,8 @@ def simulate_trade(
     last_idx   = len(m1_slice) - 1
     exit_bid   = closes[last_idx]
     exit_ts    = pd.Timestamp(dts[last_idx])
-    entry_eff  = sc.entry_price(entry_bid, direction)
-    gross_pips = CostModel.pnl_pips(entry_eff, exit_bid, direction)
-    net_pips   = cost_model.net_pnl_pips(entry_eff, exit_bid, direction, lots, scenario)
+    gross_pips = CostModel.pnl_pips(entry_bid, exit_bid, direction)
+    net_pips   = gross_pips - sc.total_cost_pips(lots)
     return TradeResult(
         exit_reason="TIME_EXIT",
         entry_time=entry_time_ts,

@@ -95,6 +95,7 @@ META_COLUMNS = [
     "h1_bias",
     "bar_index",
     "entry_bar_index",
+    "poi_id",
     "resultado",
 ]
 
@@ -238,14 +239,17 @@ def _simulate_all(
     return pd.concat([setups_clean, results_df], axis=1)
 
 
-def _build_outputs(full_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
+def _build_outputs(
+    full_df: pd.DataFrame,
+    c2_excluded_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int, int]:
     """
     Construye los tres DataFrames de salida:
-      (csv_df, meta_df, excluidos_df, n_ambiguous)
+      (csv_df, meta_df, excluidos_df, n_ambiguous, n_c2)
 
     csv_df       : dataset principal sin leakage
     meta_df      : metadatos completos de cada trade en csv_df
-    excluidos_df : setups excluidos (AMBIGUOUS); NO van al CSV principal
+    excluidos_df : setups excluidos (AMBIGUOUS + C2_POI_REUSE)
     """
     full_df = full_df.copy()
 
@@ -277,20 +281,32 @@ def _build_outputs(full_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, p
     # ── CSV principal
     csv_df = main_df[CSV_COLUMNS].copy()
 
-    # ── Metadata (trazabilidad completa, incluyendo resultado)
+    # ── Metadata (trazabilidad completa, incluyendo resultado y poi_id)
     meta_df = main_df[META_COLUMNS].copy()
 
-    # ── Excluidos (AMBIGUOUS)
+    # ── Excluidos: AMBIGUOUS + C2_POI_REUSE
+    excl_parts = []
     if n_ambiguous > 0:
         excluidos_raw = excluidos_raw.copy()
         excluidos_raw["motivo_exclusion"] = "AMBIGUOUS"
         excluidos_raw["fecha"] = excluidos_raw["fecha"].astype(str)
         excl_cols = [c for c in EXCLUIDOS_COLUMNS if c in excluidos_raw.columns]
-        excluidos_df = excluidos_raw[excl_cols].copy()
+        excl_parts.append(excluidos_raw[excl_cols].copy())
+
+    n_c2 = 0
+    if c2_excluded_df is not None and len(c2_excluded_df) > 0:
+        n_c2 = len(c2_excluded_df)
+        c2_df = c2_excluded_df.copy()
+        c2_df["fecha"] = c2_df["fecha"].astype(str)
+        excl_cols_c2 = [c for c in EXCLUIDOS_COLUMNS if c in c2_df.columns]
+        excl_parts.append(c2_df[excl_cols_c2].copy())
+
+    if excl_parts:
+        excluidos_df = pd.concat(excl_parts, ignore_index=True)
     else:
         excluidos_df = pd.DataFrame(columns=EXCLUIDOS_COLUMNS)
 
-    return csv_df, meta_df, excluidos_df, n_ambiguous
+    return csv_df, meta_df, excluidos_df, n_ambiguous, n_c2
 
 
 def main():
@@ -312,10 +328,12 @@ def main():
         print(f"\n[detect] Detectando setups M15 ({args.start} → {args.end})...")
     t1 = time.perf_counter()
 
-    setups_df = detect_setups(m15, h1, start_date=args.start, end_date=args.end)
+    setups_df, c2_excluded_df = detect_setups(m15, h1, start_date=args.start, end_date=args.end)
 
     if verbose:
+        n_c2_detect = len(c2_excluded_df) if c2_excluded_df is not None else 0
         print(f"[detect] {len(setups_df):,} setups detectados en {time.perf_counter()-t1:.1f}s")
+        print(f"[detect] {n_c2_detect:,} setups filtrados por C2 (POI reuse en mismo episodio)")
 
     if len(setups_df) == 0:
         print("[ERROR] No se detectaron setups. Verifica los datos y parámetros.")
@@ -323,7 +341,7 @@ def main():
 
     full_df = _simulate_all(setups_df, m1, verbose)
 
-    csv_df, meta_df, excluidos_df, n_ambiguous = _build_outputs(full_df)
+    csv_df, meta_df, excluidos_df, n_ambiguous, n_c2 = _build_outputs(full_df, c2_excluded_df)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -350,6 +368,7 @@ def main():
     print(f"  resultado = 1 (net>0) : {n_tp:>6,}  ({n_tp/n_total:.1%})")
     print(f"  resultado = 0 (net<=0): {n_sl:>6,}  ({n_sl/n_total:.1%})")
     print(f"  Excluidos AMBIGUOUS   : {n_ambiguous:>6,}  → {args.excluidos}")
+    print(f"  Excluidos C2_POI_REUSE: {n_c2:>6,}  → {args.excluidos}")
     print(f"  Tiempo total          : {elapsed:.1f}s")
     print(f"  Metadata guardada en  : {meta_path}")
     print(f"{'='*60}")

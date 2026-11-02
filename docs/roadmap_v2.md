@@ -1,7 +1,9 @@
 # Roadmap Versión 2 — Funcionalidades pospuestas
 
-**Última actualización:** 2026-11-02
+**Última actualización:** 2026-11-02 (cierre V1)
 **Propósito:** Documentar todo lo que NO se implementa en la Versión 1 (primer entregable académico) pero que forma parte de la estrategia completa o puede mejorarla en el futuro.
+
+**Estado V1:** Dataset cerrado definitivamente con 2,642 setups. Las correcciones C1 (BID-BID) y C2 (unicidad POI por episodio) fueron incorporadas antes del cierre.
 
 Nada aquí se descarta. Cada entrada tiene: qué es, por qué se pospone, qué hace falta para implementarlo y qué módulos actuales se verían afectados.
 

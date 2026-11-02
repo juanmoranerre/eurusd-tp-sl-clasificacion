@@ -156,3 +156,35 @@
 **Dirección BUY:** entrada a ASK (BID+spread), salida a BID. SELL: entrada a BID, salida a ASK.
 **Swap:** improbable (<90 min/operación). Registrar si aparece.
 **Consecuencia:** backtester implementa CostModel parametrizable con los escenarios definidos.
+
+---
+
+## DEC-017: Convención BID-BID para P&L (C1 — 2026-11-02)
+
+**Decisión:** Todos los P&L del backtester se calculan BID-a-BID. El coste total (spread + slippage + comisión = 0.7 pips) se descuenta UNA SOLA VEZ como ajuste explícito en `net_pips`.
+
+**Problema anterior:** Para trades BUY, `simulate_trade` computaba `gross_pips` usando `entry_ask = entry_bid + spread` (ya descontaba el spread en el precio de entrada), y luego `net_pips = gross_pips − total_cost_pips` que incluía el spread de nuevo. Resultado: double-counting de 0.2 pips en BUY. SELL era correcto.
+
+**Efecto:** 5 trades TIME_EXIT BUY pasaron de resultado=0 a resultado=1. El resto del dataset no cambió.
+
+**Limitación aceptada:** Los datos Dukascopy M1 son BID-only. Las activaciones reales de SL/TP en cuentas con ASK/BID separados difieren en ≤ spread (0.1–0.5 pips). Esta diferencia es inferior a la incertidumbre del supuesto de spread y se acepta para V1.
+
+**Consecuencia:** `src/backtesting/trade_simulator.py` modificado. Docstring actualizado con descripción explícita de la convención BID-BID.
+
+---
+
+## DEC-018: Una oportunidad por POI por episodio de contacto (C2 — 2026-11-02)
+
+**Decisión:** Un POI solo puede generar un setup por episodio continuo de contacto con el precio. Un episodio termina cuando el precio sale completamente de la zona durante ≥1 barra M15.
+
+**Definición de "salida completa":**
+- POI alcista (demanda): `bar_low > max(proximal, distal)` → precio sobre la zona
+- POI bajista (oferta): `bar_high < min(proximal, distal)` → precio bajo la zona
+
+**Problema anterior:** Un POI en estado TOUCHED podía generar setups en barras M15 consecutivas mientras el precio permanecía en la zona, resultando en múltiples entradas idénticas en el mismo retroceso.
+
+**Efecto:** 96 setups filtrados por C2 de un pool de 2,738 candidatos. 58 setups netos eliminados del dataset (38 barras encontraron un POI alternativo). Dataset final: 2,642 setups.
+
+**Implementación:** Campos `poi_id`, `episode_count`, `last_setup_episode` añadidos al dataclass `POI`. Tracking en `setup_detector.py`. Los setups filtrados van a `eurusd_operaciones_excluidas.csv` con `motivo_exclusion="C2_POI_REUSE"`.
+
+**Consecuencia:** `src/features/poi.py`, `src/strategy/setup_detector.py` y `scripts/generate_dataset.py` modificados.

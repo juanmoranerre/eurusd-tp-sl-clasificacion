@@ -61,6 +61,9 @@ class POI:
     state:      POIState = POIState.FRESH
     touches:    int      = 0
     source_bar: pd.Timestamp | None = None  # barra del extremo origen (no disponibilidad)
+    poi_id:               int = 0   # identificador único asignado por _pois_from_features
+    episode_count:        int = 0   # se incrementa cada vez que el precio sale completamente de la zona
+    last_setup_episode:   int = -1  # episodio en que se generó el último setup (C2)
 
     @property
     def midpoint(self) -> float:
