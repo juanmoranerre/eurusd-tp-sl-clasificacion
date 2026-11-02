@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data — raw files are never committed (too large)
+data/raw/
+
+# Processed data (regenerable from raw)
+data/processed/
+
+# Experiment outputs
+outputs/
+runs/
+mlruns/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Test/coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Credentials and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated datasets
+data/datasets/
+*.bi5
+*.parquet
+
+# Generated model artifacts
+# /models/ excluye solo la carpeta raíz; src/models/ se versiona normalmente
+/models/
+checkpoints/
+
+# Results: trackear estructura (.gitkeep) pero no archivos generados
+results/reports/*
+results/figures/*
+results/metrics/*
+!results/reports/.gitkeep
+!results/figures/.gitkeep
+!results/metrics/.gitkeep

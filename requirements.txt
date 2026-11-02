@@ -1,0 +1,12 @@
+# ── Etapa 0 + 1: infraestructura y parser ─────────────────────────────────────
+pandas>=2.0
+numpy>=1.24
+pyarrow>=12.0          # backend Parquet
+pytest>=7.0
+
+# ── Etapa 2+: feature engineering (instalar cuando se necesiten) ──────────────
+# pandas-ta>=0.3.14b   # indicadores técnicos
+# xgboost>=2.0         # modelo clasificación
+# lightgbm>=4.0        # alternativa a XGBoost
+# shap>=0.43           # interpretabilidad
+# optuna>=3.0          # tuning (ya disponible en base Anaconda)
