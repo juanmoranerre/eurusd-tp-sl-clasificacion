@@ -1,8 +1,25 @@
 # Especificación de la estrategia EUR/USD
 
-**Estado:** Borrador inicial — elementos CONFIRMADOS marcados, resto PENDIENTE  
+**Estado:** Actualizado con decisiones del trader — ver tabla de estado  
 **Última actualización:** 2026-11-01  
 **Referencia:** Master prompt secciones 2.1–2.11, videos 1 y 2
+
+---
+
+## Estado de decisiones (actualizado 2026-11-01)
+
+| Bloque | Decisiones | Estado |
+|--------|-----------|--------|
+| Sesiones | PD-001 | ✅ RESUELTO (DEC-006) |
+| Estructura (swings, BOS, CHOCH) | PD-002, PD-003, PD-004 | ✅ RESUELTO (DEC-007) |
+| Displacement | PD-005 | ⚠️ PARCIAL — score implementable, umbral PENDING |
+| Order Blocks | PD-006 | ✅ RESUELTO (DEC-009) |
+| POI (tipos, TF, estados) | PD-007, PD-008, PD-009, PD-010 | ✅ RESUELTO (DEC-010) |
+| Liquidez | PD-011, PD-012 | ✅ RESUELTO (DEC-011) |
+| Fibonacci | PD-013, PD-014 | ✅ RESUELTO (DEC-012) |
+| Ejecución y gestión | PD-015, PD-016, PD-017, PD-018 | ⚠️ PARCIAL — BE tipo B y TP% PENDING |
+| Etiquetado ML | PD-019, PD-020 | ✅ RESUELTO (DEC-014) |
+| Costes | PD-021 | ⚠️ PARCIAL — comisión round-turn vs por-lado PENDING |
 
 ---
 
